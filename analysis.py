@@ -36,13 +36,12 @@ pylab.rcParams.update(params)
 
 #%%
 # DATA IMPORTING AND CLEANING
-print("="*20, "DATA IMPORTING AND CLEANING", "="*20)
 #path = r'D:\Studies\UT\MFI\STA2540 Ins Risk\Lin\project\data'
 #df_full = pd.read_csv(path+"\DailyTreasuryYieldCurveRateData.csv")
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-#df_full = pd.read_csv(dir_path + '\data\DailyTreasuryYieldCurveRateData.csv')
-df_full = pd.read_csv(dir_path + '\data\MonthlyTreasuryYieldCurveRateData.csv')
+df_full = pd.read_csv(dir_path + '\data\DailyTreasuryYieldCurveRateData.csv')
+#df_full = pd.read_csv(dir_path + '\data\MonthlyTreasuryYieldCurveRateData.csv')
 
 
 # 2 months rates are only available from 2018 and onward
@@ -180,17 +179,17 @@ print("="*20, "Nelson-Siegel", "="*20)
 # print('RMSE is ', ns_parameters(df.iloc[-1]))
 # =============================================================================
 
-def ns_parameters (y, t=np.array([1/12, 3/12, 6/12, 1, 2, 3, 5, 7, 10, 20, 30])):
-    curve, status = calibrate_ns_ols(t, y)
-    assert status.success
-    
-    [beta1, beta2, beta3, tau] = str(curve).split(',')
-    beta1 = float(beta1.split('=')[1])
-    beta2 = float(beta2.split('=')[1])
-    beta3 = float(beta3.split('=')[1])
-    tau = float(tau.split('=')[1][:-1])
-    
-    return beta1, beta2, beta3, tau
+#def ns_parameters (y, t=np.array([1/12, 3/12, 6/12, 1, 2, 3, 5, 7, 10, 20, 30])):
+#    curve, status = calibrate_ns_ols(t, y)
+#    assert status.success
+#    
+#    [beta1, beta2, beta3, tau] = str(curve).split(',')
+#    beta1 = float(beta1.split('=')[1])
+#    beta2 = float(beta2.split('=')[1])
+#    beta3 = float(beta3.split('=')[1])
+#    tau = float(tau.split('=')[1][:-1])
+#    
+#    return beta1, beta2, beta3, tau
 
 
 def get_I_matrix (tau, t=np.array([1/12, 3/12, 6/12, 1, 2, 3, 5, 7, 10, 20, 30])):
@@ -204,7 +203,8 @@ def get_I_matrix (tau, t=np.array([1/12, 3/12, 6/12, 1, 2, 3, 5, 7, 10, 20, 30])
     
     return np.array(I)
 
-
+#0.0609
+#0.0299/12
 def ns_predict (y, dy, lmbda=0.0609):
 #    b1, b2, b3, tau = ns_parameters(y)
     tau = 1/lmbda
@@ -569,7 +569,7 @@ LEARNING_RATE = 0.01
 #EPOCHS = 1000
 EPOCHS = 10000
 #BATCH_SIZE = 500
-BATCH_SIZE = 100
+BATCH_SIZE = 1000
 
 #    target = target_std
 #    input = data_std.iloc[:-1, :]
@@ -673,10 +673,12 @@ ann_sa = df.iloc[-1].copy().add(dy_pred2)
 #pred_sa.index = ['NS', 'PCA', 'ANN']
 
 
+x = [1/12, 3/12, 6/12, 1, 2, 3, 5, 7, 10, 20, 30]
 plt.figure(figsize=(10,6))
-plt.plot(ns_bl, label='NS')
-plt.plot(pca_bl, label='PCA')
-plt.plot(ann_bl, label='ANN')
+plt.plot(x, ns_bl, label='NS')
+plt.plot(x, pca_bl, label='PCA')
+plt.plot(x, ann_bl, label='ANN')
+plt.xticks(x, ('1Mo','','','','1Yr','','','5Yr','','10Yr', '20Yr', '30Yr'))
 plt.title('Predicted Yield Curve of 2020 Baseline Senario')
 plt.ylabel('Yields (%)')
 plt.legend()
@@ -684,9 +686,10 @@ plt.show()
 
 
 plt.figure(figsize=(10,6))
-plt.plot(ns_sa, label='NS')
-plt.plot(pca_sa, label='PCA')
-plt.plot(ann_sa, label='ANN')
+plt.plot(x, ns_sa, label='NS')
+plt.plot(x, pca_sa, label='PCA')
+plt.plot(x, ann_sa, label='ANN')
+plt.xticks(x, ('1Mo','','','','1Yr','','','5Yr','','10Yr', '20Yr', '30Yr'))
 plt.title('Predicted Yield Curve of 2020 Severely Adverse Senario')
 plt.ylabel('Yields (%)')
 plt.legend()
