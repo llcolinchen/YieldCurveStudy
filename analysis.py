@@ -36,7 +36,7 @@ pylab.rcParams.update(params)
 
 #%%
 # DATA IMPORTING AND CLEANING
-
+print("="*20, "DATA IMPORTING AND CLEANING", "="*20)
 #path = r'D:\Studies\UT\MFI\STA2540 Ins Risk\Lin\project\data'
 #df_full = pd.read_csv(path+"\DailyTreasuryYieldCurveRateData.csv")
 
@@ -63,7 +63,7 @@ df_dy.columns = ['d_3 Mo', 'd_5 Yr', 'd_10 Yr']
 
 #%%
 # DATA EXPLORATION
-
+print("="*20, "DATA EXPLORATION", "="*20)
 df_full[['1 Mo','2 Mo','3 Mo']].plot(figsize=(10,6))
 start = pd.to_datetime(df_full.Date.iloc[0]).year
 end = pd.to_datetime(df_full.Date.iloc[-1]).year + 1
@@ -126,7 +126,7 @@ plot_yield_surface(df, start, end, "Treasury Yield Surface")
 
 #%%
 # NS
-
+print("="*20, "Nelson-Siegel", "="*20)
 #y = NelsonSiegelSvenssonCurve(0.028, -0.03, -0.04, -0.015, 1.1, 4.0)
 #t = np.linspace(0, 30, 100)
 #plt.plot(t, y(t))
@@ -268,6 +268,7 @@ ns_pred, ns_rmse = ns_main (df)
 
 #%%
 # PCA
+print("="*20, "Principal Component Analysis", "="*20)
 
 def graph_var_exp (eig_vals):
     tot = sum(eig_vals)
@@ -411,7 +412,7 @@ pca_pred, pca_rmse = pca_main (df, df_dy)
 #%%
 
 # ANN
-
+print("="*20, "Artificial Neural Network", "="*20)
 
 data = df.copy()
 #data = data[:-1]
@@ -566,7 +567,7 @@ class Learner(object):
 
 LEARNING_RATE = 0.01
 #EPOCHS = 1000
-EPOCHS = 3000
+EPOCHS = 10000
 #BATCH_SIZE = 500
 BATCH_SIZE = 100
 
@@ -629,8 +630,9 @@ plot_yield_surface(y_pred - df.iloc[1:], start, end, "Testing Errors for all per
 
 
 #%%
-
 # Prediction on 2020 Q1 senarios
+print("="*20, "2020 Q1 Predictions", "="*20)
+
 senarios = pd.DataFrame({'3 Mo':[1.6, 0.1], '5 Yr': [1.7, 0.5], '10 Yr':[1.8, 0.7]})
 senarios.index = ['Baseline', 'SA']
 
