@@ -41,7 +41,9 @@ pylab.rcParams.update(params)
 #df_full = pd.read_csv(path+"\DailyTreasuryYieldCurveRateData.csv")
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-df_full = pd.read_csv(dir_path + '\data\DailyTreasuryYieldCurveRateData.csv')
+#df_full = pd.read_csv(dir_path + '\data\DailyTreasuryYieldCurveRateData.csv')
+df_full = pd.read_csv(dir_path + '\data\MonthlyTreasuryYieldCurveRateData.csv')
+
 
 # 2 months rates are only available from 2018 and onward
 df = df_full.drop(columns=['Date', '2 Mo'])
@@ -221,7 +223,7 @@ def ns_predict (y, dy, lmbda=0.0609):
 
 def ns_main (dat, show_rmse=True, show_graph=True):
     
-    rmse = 0
+    rmse = np.empty(len(dat)-1)
     dat_pred = pd.DataFrame(columns=dat.columns)
     dat_pred = dat_pred.append(dat.iloc[0])
     
@@ -234,10 +236,18 @@ def ns_main (dat, show_rmse=True, show_graph=True):
         y_pred = ns_predict(y, dy)
         
         dat_pred = dat_pred.append(y_pred)
-        rmse += np.sqrt(mean_squared_error(y_true, y_pred))
+        rmse[i] = np.sqrt(mean_squared_error(y_true, y_pred))
     
     if show_rmse:
-        print("Total Root Mean Square Error of NS method is", round(rmse,4))
+        print("Average Root Mean Square Error of NS method is", round(np.mean(rmse),4))
+        plt.figure(figsize=(10,7))
+        plt.plot(rmse)
+        plt.plot(np.repeat(np.mean(rmse), len(dat)-1))
+        plt.title('Root Mean Square Error over Testing Periods')
+        plt.ylabel('Errors')
+        plt.xlabel('Periods')
+        plt.show()
+        
     if show_graph:
         plot_yield_surface(dat_pred, start, end, " NS Predicted Yield Surface")
         plot_yield_surface(dat_pred - dat, start, end, "Testing Errors for all periods", False)
@@ -315,10 +325,11 @@ def pca_predict (dat, dy):
 
 def pca_main (dat, dat_dy, show_rmse=True, show_graph=True):
     
-    rmse = 0
-    dat_pred = dat.copy().iloc[:10] # PCA requires minimum data for covariance
+    skip = 10
+    rmse = np.empty(len(dat)-1-skip)
+    dat_pred = dat.copy().iloc[:skip] # PCA requires minimum data for covariance
     
-    for i in range(10, len(dat)-1):
+    for i in range(skip, len(dat)-1):
 #        print(i)
 #        if i%100==0: print(i)
         dat_input = dat.copy().iloc[:i]
@@ -327,10 +338,17 @@ def pca_main (dat, dat_dy, show_rmse=True, show_graph=True):
         y_pred = pca_predict(dat_input, dy)
         
         dat_pred = dat_pred.append(y_pred)
-        rmse += np.sqrt(mean_squared_error(y_true, y_pred))
+        rmse[i-skip] = np.sqrt(mean_squared_error(y_true, y_pred))
     
     if show_rmse:
-        print("Total Root Mean Square Error of NS method is", round(rmse,4))
+        print("Average Root Mean Square Error of PCA method is", round(np.mean(rmse),4))
+        plt.figure(figsize=(10,7))
+        plt.plot(rmse)
+        plt.plot(np.repeat(np.mean(rmse), len(dat)-1))
+        plt.title('Root Mean Square Error over Testing Periods')
+        plt.ylabel('Errors')
+        plt.xlabel('Periods')
+        plt.show()
     if show_graph:
         plot_yield_surface(dat_pred, start, end, " PCA Predicted Yield Surface")
         plot_yield_surface(dat_pred - df, start, end, "Testing Errors for all periods", False)
@@ -339,7 +357,6 @@ def pca_main (dat, dat_dy, show_rmse=True, show_graph=True):
 
 #%%
 pca_pred, pca_rmse = pca_main (df, df_dy)
-
 
 #%%
 
@@ -404,8 +421,12 @@ data["d_5 Yr"] = df_dy["d_5 Yr"]
 data["d_10 Yyr"] = df_dy["d_10 Yr"]
 
 
-data_std = StandardScaler().fit_transform(data) # Standardized data
-data_std = pd.DataFrame(data_std)
+#data_std = StandardScaler().fit_transform(data) # Standardized data
+#data_std = pd.DataFrame(data_std)
+
+data_target = df.diff().drop(0).reset_index(drop=True)
+#target_std = StandardScaler().fit_transform(data_target) # Standardized data
+#target_std = pd.DataFrame(target_std)
 
 #%%
 
@@ -434,7 +455,9 @@ class DNN_AE(nn.Module):
 
         dec = F.tanh(self.decoder(code))
 
-        out = T.sigmoid(self.out(dec))
+#        out = T.sigmoid(self.out(dec))
+        out = F.tanh(self.out(dec))
+#        out = self.out(dec)
 
         return out
 
@@ -471,6 +494,7 @@ class Learner(object):
         loss_hist = []
         
         for e in range(self.epochs) :
+            epoch_loss = 0
             for b in range(self.batch_num_total):
                 self.DNN_AE.optimizer.zero_grad()
                 predictions = self.DNN_AE.forward(self.current_batch)
@@ -480,9 +504,14 @@ class Learner(object):
                 self.next_batch()
                 self.DNN_AE.optimizer.step()
             
-                loss_hist.append(loss.item())
+                epoch_loss += loss.item()
+            
+            loss_hist.append(epoch_loss/self.batch_num_total)
+            
+            if e%100==0:
+                print('epoch', str(e+1), ' - loss : ', str(loss_hist[-1]))
         
-        plt.figure(figsize=(10,3))
+        plt.figure(figsize=(10,5))
         plt.plot(loss_hist)
         plt.title("Loss Histrogram")
         plt.show()   
@@ -510,51 +539,79 @@ class Learner(object):
 # 
 # 
 # =============================================================================
+##%%
+#class Visualizer :
+#    def __init__(self, target, model):
+#        self.target = target
+#        self.model = model
+#        self.samples = self.random_select()
+#
+#    def random_select(self):
+#        rndm = np.random.randint(0,self.target.shape[0]-1,10)
+#        return rndm
+#
+#    def viz(self):
+#        for _, i in enumerate(self.samples):
+#            output = self.model.forward(self.target[i]).view(28,28)
+#            cat_img = T.cat((self.target[i].view(28,28),output), 1)
+#            plt.imshow(cat_img.cpu().detach().numpy())
+#            plt.title('DNN AutoEncoder target vs output')
+#            plt.savefig('./output_images/sample'+str(_+1))
+#            plt.close()
+
+
+
 #%%
-class Visualizer :
-    def __init__(self, target, model):
-        self.target = target
-        self.model = model
-        self.samples = self.random_select()
-
-    def random_select(self):
-        rndm = np.random.randint(0,self.target.shape[0]-1,10)
-        return rndm
-
-    def viz(self):
-        for _, i in enumerate(self.samples):
-            output = self.model.forward(self.target[i]).view(28,28)
-            cat_img = T.cat((self.target[i].view(28,28),output), 1)
-            plt.imshow(cat_img.cpu().detach().numpy())
-            plt.title('DNN AutoEncoder target vs output')
-            plt.savefig('./output_images/sample'+str(_+1))
-            plt.close()
 
 
+LEARNING_RATE = 0.01
+#EPOCHS = 1000
+EPOCHS = 3000
+#BATCH_SIZE = 500
+BATCH_SIZE = 100
 
-#%%
-if __name__ == '__main__':
-    
-    LEARNING_RATE = 0.1
-    EPOCHS = 500
-    BATCH_SIZE = 1000
+#    target = target_std
+#    input = data_std.iloc[:-1, :]
+target = data_target
+input = data.iloc[:-1, :]
+target = T.Tensor(target.values)
+input = T.Tensor(input.values)
 
-    target = data_std.iloc[1:, :11]
-    input = data_std.iloc[:-1, :]
-    target = T.Tensor(target.values)
-    input = T.Tensor(input.values)
+net = DNN_AE(LEARNING_RATE)
+target = target.to(net.device)
+input = input.to(net.device)
+print(target.shape)
+print(input.shape)
 
-    net = DNN_AE(LEARNING_RATE)
-    target = target.to(net.device)
-    input = input.to(net.device)
-    print(target.shape)
-    print(input.shape)
+learner = Learner(net, input, target, batch_size=BATCH_SIZE, epochs=EPOCHS)
+model = learner.learn()
 
-    learner = Learner(net, input, target, batch_size=BATCH_SIZE, epochs=EPOCHS)
-    model = learner.learn()
+output = net.forward(input)
+dy_pred = output.detach().numpy()
+y_pred = data.iloc[:-1, :11].copy().add(dy_pred)
+#y_pred = data_std.iloc[:-1, :11].copy().add(dy_pred)
 
-    viz = Visualizer(target, model)
-    viz.viz()
+ann_rmse = np.empty(len(df)-1)
+for i in range(len(df)-1):
+    y_true_ = df.iloc[i+1]
+#    y_true_ = target_std.iloc[i]
+    y_pred_ = y_pred.iloc[i]
+    ann_rmse[i] = np.sqrt(mean_squared_error(y_true_, y_pred_))
+
+print("Average Root Mean Square Error of ANN method is", round(np.mean(ann_rmse),4))
+plt.figure(figsize=(10,7))
+plt.plot(ann_rmse)
+plt.plot(np.repeat(np.mean(ann_rmse), len(ann_rmse)))
+plt.title('Root Mean Square Error over Testing Periods')
+plt.ylabel('Errors')
+plt.xlabel('Periods')
+plt.show()
+
+plot_yield_surface(y_pred, start, end, " ANN Predicted Yield Surface")
+plot_yield_surface(y_pred - df.iloc[1:], start, end, "Testing Errors for all periods", False)
+
+#viz = Visualizer(target, model)
+#viz.viz()
 
 
 
@@ -562,11 +619,75 @@ if __name__ == '__main__':
 
 
 # what learning rate to use
-# fix batch things
-
+# fix batch things, that cuased bad loss histogram
+# when should normalization happen? before we take diff or after
 
 
 
 
 # https://github.com/imhgchoi/pytorch-implementations/blob/master/AutoEncoders/DNN_AE/main.py
+
+
+#%%
+
+# Prediction on 2020 Q1 senarios
+senarios = pd.DataFrame({'3 Mo':[1.6, 0.1], '5 Yr': [1.7, 0.5], '10 Yr':[1.8, 0.7]})
+senarios.index = ['Baseline', 'SA']
+
+yeilds_2019 = df.iloc[-1][['3 Mo', '5 Yr', '10 Yr']]
+
+senarios = senarios - yeilds_2019
+senarios.columns = ['d_3 Mo', 'd_5 Yr', 'd_10 Yr']
+
+#pred_bl = pd.DataFrame(columns=df.columns)
+#pred_sa = pd.DataFrame(columns=df.columns)
+
+
+ns_bl = ns_predict (df.iloc[-1], senarios.loc['Baseline'])
+ns_sa = ns_predict (df.iloc[-1], senarios.loc['SA'])
+#pred_bl = pred_bl.append(ns_bl, ignore_index=True)
+#pred_sa = pred_sa.append(ns_sa, ignore_index=True)
+
+pca_bl = pca_predict (df, senarios.loc['Baseline'])
+pca_sa = pca_predict (df, senarios.loc['SA'])
+#pred_bl = pred_bl.append(pca_bl, ignore_index=True)
+#pred_sa = pred_sa.append(pca_sa, ignore_index=True)
+
+input1 = df.iloc[-1].copy().append(senarios.loc['Baseline'])
+input1 = T.Tensor(input1.values)
+output1 = net.forward(input1)
+dy_pred1 = output1.detach().numpy()
+ann_bl = df.iloc[-1].copy().add(dy_pred1)
+#pred_bl = pred_bl.append(ann_bl, ignore_index=True)
+
+input2 = df.iloc[-1].copy().append(senarios.loc['SA'])
+input2 = T.Tensor(input2.values)
+output2 = net.forward(input2)
+dy_pred2 = output2.detach().numpy()
+ann_sa = df.iloc[-1].copy().add(dy_pred2)
+#pred_sa = pred_sa.append(ann_sa, ignore_index=True)
+
+#pred_bl.index = ['NS', 'PCA', 'ANN']
+#pred_sa.index = ['NS', 'PCA', 'ANN']
+
+
+plt.figure(figsize=(10,6))
+plt.plot(ns_bl, label='NS')
+plt.plot(pca_bl, label='PCA')
+plt.plot(ann_bl, label='ANN')
+plt.title('Predicted Yield Curve of 2020 Baseline Senario')
+plt.ylabel('Yields (%)')
+plt.legend()
+plt.show()
+
+
+plt.figure(figsize=(10,6))
+plt.plot(ns_sa, label='NS')
+plt.plot(pca_sa, label='PCA')
+plt.plot(ann_sa, label='ANN')
+plt.title('Predicted Yield Curve of 2020 Severely Adverse Senario')
+plt.ylabel('Yields (%)')
+plt.legend()
+plt.show()
+
 
